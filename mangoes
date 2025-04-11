@@ -10,13 +10,13 @@ local SpawnedInToys = game.Workspace:WaitForChild(plr.Name.."SpawnedInToys")
 --
 
 local Window = Fluent:CreateWindow({
-	Title = "Abyss",
+	Title = "A test",
 	SubTitle = "V1",
 	TabWidth = 160,
 	Size = UDim2.fromOffset(580, 460),
 	Acrylic = false,
 	Theme = "VeryDark",
-	MinimizeKey = Enum.KeyCode.M
+	MinimizeKey = Enum.KeyCode.L
 })
 
 --Fluent provides Lucide Icons https://lucide.dev/icons/ for the tabs, icons are optional
