@@ -1,0 +1,662 @@
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+
+--
+local plr = game.Players.LocalPlayer
+local SetNetworkOwnerRemote = game.ReplicatedStorage.GrabEvents.SetNetworkOwner
+local SpawnToyRemoteFunction = game.ReplicatedStorage.MenuToys.SpawnToyRemoteFunction
+local SpawnedInToys = game.Workspace:WaitForChild(plr.Name.."SpawnedInToys")
+--
+
+local Window = Fluent:CreateWindow({
+	Title = "Abyss",
+	SubTitle = "V1",
+	TabWidth = 160,
+	Size = UDim2.fromOffset(580, 460),
+	Acrylic = false,
+	Theme = "VeryDark",
+	MinimizeKey = Enum.KeyCode.M
+})
+
+--Fluent provides Lucide Icons https://lucide.dev/icons/ for the tabs, icons are optional
+local Tabs = {
+	ToyAuras = Window:AddTab({ Title = "Toy Auras", Icon = "" }),
+	Player = Window:AddTab({ Title = "Player", Icon = "" }),
+	Troll = Window:AddTab({ Title = "Troll", Icon = "" }),
+	Effects = Window:AddTab({ Title = "Effects", Icon = "" }),
+	ESP = Window:AddTab({ Title = "ESP", Icon = "" }),
+	DirectionalPunch = Window:AddTab({ Title = "Directional Punch", Icon = "" })
+}
+
+local Options = Fluent.Options
+
+do
+	-----------------------------------------------------
+	local Include = Tabs.ToyAuras:AddDropdown("Include", {
+		Title = "Include",
+		Values = {"Objects And Players","Objects","Players"},
+		Multi = false,
+		Default = 1,
+	})
+	local IncludeYourToys = Tabs.ToyAuras:AddToggle("IncludeYourToys", {Title = "Include Your Toys", Default = false })
+	local FlingAura = Tabs.ToyAuras:AddToggle("FlingAura", {Title = "Fling Aura", Default = false })
+	local FlingForce = Tabs.ToyAuras:AddSlider("FlingForce", {
+		Title = "Fling Force",
+		Description = nil,
+		Default = 100,
+		Min = 0,
+		Max = 1000000,
+		Rounding = 1
+	})
+
+	function FlingPart(part)
+		local chr = plr.Character
+		SetNetworkOwnerRemote:FireServer(part,part.CFrame)
+		local bodyForce = Instance.new("BodyForce")
+		local direction = (part.Position - chr:WaitForChild("HumanoidRootPart").Position).unit
+		bodyForce.Force = direction * Options.FlingForce.Value
+		bodyForce.Parent = part
+		game:GetService("Debris"):AddItem(bodyForce, 0.1)
+	end
+
+	local RunService = game:GetService("RunService")
+	RunService.Stepped:Connect(function()
+		if Options.FlingAura.Value == true and plr.Character then
+			local chr = plr.Character
+			local radius = 15
+			local region = Region3.new(
+				chr:WaitForChild("HumanoidRootPart").Position - Vector3.new(radius, radius, radius),
+				chr:WaitForChild("HumanoidRootPart").Position + Vector3.new(radius, radius, radius)
+			)
+
+			local parts = workspace:FindPartsInRegion3(region, nil, math.huge) -- No filtering by tags
+			for _, part in ipairs(parts) do
+				if not part.Anchored and part.Parent ~= chr and part:FindFirstChildOfClass("BodyForce") == nil and Options.FlingAura.Value == true then
+					if Options.Include.Value == "Objects" then
+						if part.Parent:FindFirstChildOfClass("Humanoid") == nil then
+							if Options.IncludeYourToys.Value == true then
+								if part.Parent and part.Parent:FindFirstChild("PlayerValue") == nil or part.Parent:FindFirstChild("PlayerValue").Value ~= plr then
+									FlingPart(part)
+								end
+							else
+								FlingPart(part)
+							end
+						end
+					elseif Options.Include.Value == "Players" then
+						if part.Parent:FindFirstChildOfClass("Humanoid") then
+							FlingPart(part)
+						end
+					elseif Options.Include.Value == "Objects And Players" then
+						if Options.IncludeYourToys.Value == true then
+							if part.Parent and part.Parent:FindFirstChild("PlayerValue") == nil or part.Parent:FindFirstChild("PlayerValue").Value ~= plr then
+								FlingPart(part)
+							end
+						else
+							FlingPart(part)
+						end
+					end
+				end
+			end
+		end
+	end)
+	-----------------------------------------------------
+	local WalkSpeed = Tabs.Player:AddToggle("WalkSpeed", {Title = "WalkSpeed", Default = false })
+	local Speed = Tabs.Player:AddSlider("Speed", {
+		Title = "Speed",
+		Description = "The amount of speed you want",
+		Default = 16,
+		Min = 16,
+		Max = 200,
+		Rounding = 1
+	})
+	local ThirdPerson = Tabs.Player:AddToggle("ThirdPerson", {Title = "3rd Person", Default = false })
+
+
+	local userInputService = game:GetService("UserInputService")
+	local runService = game:GetService("RunService")
+	local movementDirection = Vector3.zero
+
+
+	userInputService.InputBegan:Connect(function(input, gameProcessed)
+		if not gameProcessed then
+			if input.KeyCode == Enum.KeyCode.W then
+				movementDirection = movementDirection + Vector3.new(0, 0, 1) -- Forward
+			elseif input.KeyCode == Enum.KeyCode.S then
+				movementDirection = movementDirection + Vector3.new(0, 0, -1) -- Backward
+			elseif input.KeyCode == Enum.KeyCode.A then
+				movementDirection = movementDirection + Vector3.new(-1, 0, 0) -- Left
+			elseif input.KeyCode == Enum.KeyCode.D then
+				movementDirection = movementDirection + Vector3.new(1, 0, 0) -- Right
+			end
+		end
+	end)
+
+	userInputService.InputEnded:Connect(function(input, gameProcessed)
+		if not gameProcessed then
+			if input.KeyCode == Enum.KeyCode.W then
+				movementDirection = movementDirection - Vector3.new(0, 0, 1)
+			elseif input.KeyCode == Enum.KeyCode.S then
+				movementDirection = movementDirection - Vector3.new(0, 0, -1)
+			elseif input.KeyCode == Enum.KeyCode.A then
+				movementDirection = movementDirection - Vector3.new(-1, 0, 0)
+			elseif input.KeyCode == Enum.KeyCode.D then
+				movementDirection = movementDirection - Vector3.new(1, 0, 0)
+			end
+		end
+	end)
+
+	runService.RenderStepped:Connect(function(deltaTime)
+		if movementDirection.Magnitude > 0 and Options.WalkSpeed.Value == true and plr.Character then
+			local humanoidRootPart = plr.Character:WaitForChild("HumanoidRootPart")
+			local cameraCFrame = workspace.CurrentCamera.CFrame
+			local cameraLookVector = Vector3.new(cameraCFrame.LookVector.X, 0, cameraCFrame.LookVector.Z).Unit
+			local cameraRightVector = Vector3.new(cameraCFrame.RightVector.X, 0, cameraCFrame.RightVector.Z).Unit
+			local adjustedMovement = (cameraLookVector * movementDirection.Z + cameraRightVector * movementDirection.X).Unit
+			local offset = adjustedMovement * Options.Speed.Value * deltaTime
+			humanoidRootPart.CFrame = humanoidRootPart.CFrame + offset
+		end
+	end)
+
+	WalkSpeed:OnChanged(function(Bool)
+		movementDirection = Vector3.zero
+	end)
+
+	ThirdPerson:OnChanged(function(Bool)
+		if Bool == true then
+			game.Players.LocalPlayer.CameraMode = Enum.CameraMode.Classic
+			game.Players.LocalPlayer.CameraMaxZoomDistance = 100000
+		else
+			game.Players.LocalPlayer.CameraMode = Enum.CameraMode.LockFirstPerson
+			game.Players.LocalPlayer.CameraMaxZoomDistance = 0
+		end
+	end)
+	----------------------------------------------------------------------------------------------------------
+	----------------------------------------------------------------------------------------------------------
+	local Selected = plr
+	local Time = Tabs.DirectionalPunch:AddSlider("Time", {
+		Title = "Time",
+		Description = "The amount of time in seconds it takes before contracting",
+		Default = 2,
+		Min = 0,
+		Max = 15,
+		Rounding = 1
+	})
+
+
+
+	local PlayerSelected = Tabs.DirectionalPunch:AddInput("PlayerSelected", {
+		Title = "Player",
+		Default = "",
+		Numeric = false,
+		Finished = false,
+		Placeholder = "Username",
+		Callback = function(Value)
+			print("Input changed:", Value)
+		end
+	})
+
+	PlayerSelected:OnChanged(function(Value)
+		if game.Players:FindFirstChild(Value) then
+			Selected = game.Players:FindFirstChild(Value)
+		end
+	end)
+
+
+	Tabs.DirectionalPunch:AddButton({
+		Title = "Start",
+		Description = "Start the event!",
+		Callback = function()
+			Window:Dialog({
+				Title = "Start Directional Punch?",
+				Content = "You cannot stop this event once it has started. Spawn DRAWERS for a better effect",
+				Buttons = {
+					{
+						Title = "Confirm",
+						Callback = function()
+							if workspace:FindFirstChild("GrabParts") and workspace:FindFirstChild("GrabParts").GrabPart.WeldConstraint and workspace:FindFirstChild("GrabParts").GrabPart.WeldConstraint.Part1.Parent:FindFirstChild("Humanoid") then
+								Selected = workspace:FindFirstChild("GrabParts").GrabPart.WeldConstraint.Part1.Parent
+							end
+							Start_DirectionPunch_Event()
+						end
+					},
+					{
+						Title = "Cancel",
+					}
+				}
+			})
+		end
+	})
+
+	local FinalRipOff = Tabs.DirectionalPunch:AddParagraph({
+		Title = "Final Rip-Off",
+		Content = ""
+	})
+
+
+	local SuperSlam = Tabs.DirectionalPunch:AddToggle("SuperSlam", {Title = "Super Slam", Default = false })
+	local SuperThrowPunch = Tabs.DirectionalPunch:AddToggle("SuperThrowPunch", {Title = "Super Throw Punch", Default = false })
+
+
+	plr:GetMouse().KeyDown:Connect(function(key)
+		if key == "1" then
+			if Options.SuperSlam.Value == true then
+				FinalRipOff_Move()
+			end
+		end
+		if key == "2" then
+			if Options.SuperThrowPunch.Value == true then
+				local radius = 10
+				local region = Region3.new(
+					plr.Character:WaitForChild("HumanoidRootPart").Position - Vector3.new(radius, radius, radius),
+					plr.Character:WaitForChild("HumanoidRootPart").Position + Vector3.new(radius, radius, radius)
+				)
+
+				local parts = workspace:FindPartsInRegion3(region, nil, math.huge)
+				for _, Character in ipairs(parts) do
+					if Character.Parent:FindFirstChild("Humanoid") and Character.Parent.Name ~= plr.Name then
+						SuperThrowPunch(Character.Parent)
+						return 
+					end
+				end
+			end
+		end
+	end)
+
+	function SuperThrowPunch(character)
+		local HumanoidRootPart = character:WaitForChild("HumanoidRootPart")
+		local Torso = character:WaitForChild("Torso")
+		
+		SetNetworkOwnerRemote:FireServer(Torso,Torso.CFrame)
+		wait(0.1)
+		SetNetworkOwnerRemote:FireServer(Torso,Torso.CFrame)
+		wait(0.1)
+		HumanoidRootPart.CFrame = plr.Character.HumanoidRootPart.CFrame * CFrame.new(Vector3.new(4,0,0))
+		SetNetworkOwnerRemote:FireServer(Torso,Torso.CFrame)
+		wait(0.1)
+		character.Humanoid.Health -= 10
+		HumanoidRootPart.CFrame = plr.Character.HumanoidRootPart.CFrame * CFrame.new(Vector3.new(4,0,0))
+		local humanoid = plr.Character:WaitForChild("Humanoid")
+	
+		local AnimationId = "218504594"
+		local Anim = Instance.new("Animation")
+		Anim.AnimationId = "rbxassetid://"..AnimationId
+		local Track = game.Players.LocalPlayer.Character.Humanoid:LoadAnimation(Anim)
+		
+		Track:Play()
+		HumanoidRootPart.CFrame = plr.Character.HumanoidRootPart.CFrame * CFrame.new(Vector3.new(4,0,0))
+
+		
+		local BodyForce = Instance.new("BodyForce")
+		BodyForce.Force = plr.Character.Torso.CFrame.LookVector * 9000
+		BodyForce.Parent = HumanoidRootPart
+		game:GetService("Debris"):AddItem(BodyForce, 0.1)
+
+
+	end
+
+	function FinalRipOff_Move()
+		local Ingore = {}
+		local params = RaycastParams.new()
+		params.FilterType = Enum.RaycastFilterType.Exclude
+		params.FilterDescendantsInstances = {Ingore,workspace.CurrentCamera}
+		local ray = workspace:Raycast(workspace.CurrentCamera.CFrame.Position,workspace.CurrentCamera.CFrame.LookVector*50,params)
+		if ray and ray.Instance.Parent.Name == plr.Name then
+			table.insert(Ingore,ray.Instance)
+		end
+		if ray and ray.Instance and ray.Instance.Parent and ray.Instance.Parent:FindFirstChild("Humanoid") and ray.Instance.Parent.Name ~= plr.Name then
+			print(ray.Instance.Name)
+			local Character = ray.Instance.Parent
+			local Torso = Character:WaitForChild("Torso")
+			local HRP = plr.Character:WaitForChild("HumanoidRootPart")
+			local StartingPoint = HRP.Position
+			local MiddlePoint = Vector3.new(HRP.Position.X,HRP.Position.Y+ 100,HRP.Position.Z) + HRP.CFrame.LookVector * 7
+			local LastPoint = HRP.Position + HRP.CFrame.LookVector * 60
+
+			HRP.CFrame = Torso.CFrame
+			wait(0.05)
+			SetNetworkOwnerRemote:FireServer(Torso,Torso.CFrame)
+			wait(0.1)
+			HRP.CFrame = Torso.CFrame
+			wait(0.05)
+			SetNetworkOwnerRemote:FireServer(Torso,Torso.CFrame)
+			wait(0.1)
+			HRP.CFrame = Torso.CFrame
+			wait(0.05)
+			SetNetworkOwnerRemote:FireServer(Torso,Torso.CFrame)
+			wait(0.1)
+
+			local BodyPosition = Instance.new("BodyPosition")
+			BodyPosition.P = 200000
+			BodyPosition.MaxForce = Vector3.new(99999,99999,99999)
+			BodyPosition.Position = StartingPoint
+			BodyPosition.Parent = Torso
+
+			local BodyPosition2 = Instance.new("BodyPosition")
+			BodyPosition2.P = 200000
+			BodyPosition2.MaxForce = Vector3.new(99999,99999,99999)
+			BodyPosition2.Position = StartingPoint
+			BodyPosition2.Parent = HRP
+
+			local AnimationId = "184574340"
+			local Anim = Instance.new("Animation")
+			Anim.AnimationId = "rbxassetid://"..AnimationId
+			local hitler = game.Players.LocalPlayer.Character.Humanoid:LoadAnimation(Anim)
+
+			hitler:Play()
+			hitler:AdjustSpeed(0.4)
+
+			wait(.5)
+			BodyPosition.Position = MiddlePoint
+			BodyPosition2.Position = MiddlePoint + Vector3.new(0,8,0)
+			wait(1)
+
+			for _, SmallDice in ipairs(workspace:GetDescendants()) do
+				if SmallDice.Name == "DiceSmall" and SmallDice:IsA("Model") then
+					SmallDice.PrimaryPart.CFrame = CFrame.new(LastPoint)
+				end
+			end
+
+			BodyPosition.Position = LastPoint
+			BodyPosition2.Position = LastPoint
+			wait(.5)
+			BodyPosition2:Destroy()
+			BodyPosition:Destroy()
+			Character.Humanoid.Health -= 50
+			local bodyForce = Instance.new("BodyForce")
+			local direction = (StartingPoint - LastPoint).unit
+			bodyForce.Force = direction * 5000
+			bodyForce.Parent = Torso
+			game:GetService("Debris"):AddItem(bodyForce, 0.1)
+		end
+	end
+
+	function Start_DirectionPunch_Event()
+		if Selected then
+			local Player = Selected
+			local Character = workspace
+
+			if Player:FindFirstChild("InPlot") and Player.Character then
+				Character = Player.Character
+				if Player:FindFirstChild("InPlot").Value == true then
+					return "Player In Plot"
+				end
+			else
+				Character = Selected
+			end
+
+			local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+
+			local Humanoid = Character:WaitForChild("Humanoid")
+			local Torso = Character:WaitForChild("Torso")
+
+			local OriginalCframe = plr.Character:WaitForChild("HumanoidRootPart").CFrame
+			local chr = plr.Character
+			local HRP = chr:WaitForChild("HumanoidRootPart")
+
+			for _, BodyForce in ipairs(Character:GetDescendants()) do
+				if BodyForce:IsA("BodyPosition") or BodyForce:IsA("BodyForce") then
+					BodyForce:Destroy()
+					HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0,0,0)
+				end
+			end		
+
+			local CamaPart = Instance.new("Part")
+			CamaPart.Parent = workspace
+			CamaPart.Anchored = true
+			CamaPart.Position = Vector3.new(-30.475, 205.2, 29.55)
+			workspace.CurrentCamera.CameraSubject = CamaPart
+
+			HRP.AssemblyLinearVelocity = Vector3.new(0,0,0)
+			HRP.CFrame = HumanoidRootPart.CFrame
+			wait(0.1)
+			SetNetworkOwnerRemote:FireServer(Torso,Torso.CFrame)
+			wait(0.05)
+			HRP.AssemblyLinearVelocity = Vector3.new(0,0,0)
+			HRP.CFrame = HumanoidRootPart.CFrame
+			wait(0.1)
+			SetNetworkOwnerRemote:FireServer(Torso,Torso.CFrame)
+			wait(0.05)
+			HRP.AssemblyLinearVelocity = Vector3.new(0,0,0)
+			HRP.CFrame = HumanoidRootPart.CFrame
+			wait(0.1)
+			SetNetworkOwnerRemote:FireServer(Torso,Torso.CFrame)
+			wait(0.05)
+			HRP.AssemblyLinearVelocity = Vector3.new(0,0,0)
+			HRP.CFrame = HumanoidRootPart.CFrame
+			wait(0.1)
+			SetNetworkOwnerRemote:FireServer(Torso,Torso.CFrame)
+			wait(0.05)
+
+			local PreventEscape = Humanoid.StateChanged:Connect(function()
+				if Humanoid:GetState() ~= Enum.HumanoidStateType.Seated then
+					HRP.AssemblyLinearVelocity = Vector3.new(0,0,0)
+					HRP.CFrame = HumanoidRootPart.CFrame
+					wait(0.1)
+					SetNetworkOwnerRemote:FireServer(Torso,Torso.CFrame)
+					wait(0.05)
+					HRP.AssemblyLinearVelocity = Vector3.new(0,0,0)
+					HRP.CFrame = HumanoidRootPart.CFrame
+					wait(0.1)
+					SetNetworkOwnerRemote:FireServer(Torso,Torso.CFrame)
+					wait(0.05)
+					HRP.AssemblyLinearVelocity = Vector3.new(0,0,0)
+					HRP.CFrame = HumanoidRootPart.CFrame
+					wait(0.1)
+					SetNetworkOwnerRemote:FireServer(Torso,Torso.CFrame)
+					wait(0.05)
+					HRP.CFrame = OriginalCframe
+				end
+			end)
+
+			HumanoidRootPart.CFrame = CFrame.new(Vector3.new(-30.475, 191.4, 1.45))
+			local BodyPosition = Instance.new("BodyPosition")
+			BodyPosition.Position = Vector3.new(-30.475, 191.4, 1.45)
+			BodyPosition.P = 100000
+			BodyPosition.Parent = HumanoidRootPart
+			BodyPosition.MaxForce = Vector3.new(10000,10000,10000)
+
+			for _, DrawerLightBrown in ipairs(workspace:GetDescendants()) do
+				if DrawerLightBrown:IsA("Model") and DrawerLightBrown.Name == "DrawerLightBrown" and DrawerLightBrown.PrimaryPart then
+
+					local function GeneratePosition(center, radius)
+						local theta = math.rad(math.random(0, 360)) -- Random angle around the horizontal axis
+						local phi = math.rad(math.random(0, 180)) -- Random angle from the vertical axis
+						local x = math.sin(phi) * math.cos(theta) * radius
+						local y = math.cos(phi) * radius
+						local z = math.sin(phi) * math.sin(theta) * radius
+
+						return center.Position + Vector3.new(x, y, z)
+					end
+
+					if DrawerLightBrown.PrimaryPart:FindFirstChildOfClass("BodyPosition") then
+						DrawerLightBrown.PrimaryPart:FindFirstChildOfClass("BodyPosition"):Destroy()
+					end
+
+					local BodyPosition2 = Instance.new("BodyPosition")
+					BodyPosition2.Position = GeneratePosition(Torso,55)
+					BodyPosition2.P = 20000
+					BodyPosition2.Parent = DrawerLightBrown.PrimaryPart
+					BodyPosition2.MaxForce = Vector3.new(5000000,5000000,5000000)
+
+					HRP.CFrame = DrawerLightBrown.PrimaryPart.CFrame
+					HRP.AssemblyLinearVelocity = Vector3.new(0,0,0)
+					wait(0.05)
+					SetNetworkOwnerRemote:FireServer(DrawerLightBrown:FindFirstChild("Part"),DrawerLightBrown.PrimaryPart.CFrame)
+					wait(0.05)
+					HRP.CFrame = DrawerLightBrown.PrimaryPart.CFrame
+					HRP.AssemblyLinearVelocity = Vector3.new(0,0,0)
+					wait(0.05)
+					SetNetworkOwnerRemote:FireServer(DrawerLightBrown:FindFirstChild("Part"),DrawerLightBrown.PrimaryPart.CFrame)
+					wait(0.05)
+
+				end
+			end
+			HRP.CFrame = OriginalCframe
+			HRP.AssemblyLinearVelocity = Vector3.new(0,0,0)
+
+			wait(Options.Time.Value)
+
+			for _, DrawerLightBrown in ipairs(workspace:GetDescendants()) do
+				if DrawerLightBrown:IsA("Model") and DrawerLightBrown.Name == "DrawerLightBrown" and DrawerLightBrown.PrimaryPart then
+					if DrawerLightBrown.PrimaryPart:FindFirstChildOfClass("BodyPosition") then
+						DrawerLightBrown.PrimaryPart:FindFirstChildOfClass("BodyPosition").Position = Torso.Position
+					end
+				end
+			end
+
+			wait(1)
+			HRP.CFrame = HumanoidRootPart.CFrame
+			HRP.AssemblyLinearVelocity = Vector3.new(0,0,0)
+			wait(0.1)
+			SetNetworkOwnerRemote:FireServer(Torso,Torso.CFrame)
+			wait(0.05)
+			HRP.CFrame = OriginalCframe
+
+			local bodyForce = Instance.new("BodyForce")
+			local direction = (HumanoidRootPart.Position - HRP.Position).unit
+			bodyForce.Force = direction * 9999999
+			bodyForce.Parent = HumanoidRootPart
+			game:GetService("Debris"):AddItem(bodyForce, 1)
+
+			for _, Missile in ipairs(workspace:GetDescendants()) do
+				if Missile:IsA("Model") and Missile.Name == "BombMissile" and Missile.PrimaryPart then
+					HRP.CFrame = CFrame.new(Vector3.new(Missile.PrimaryPart.Position.X,Missile.PrimaryPart.Position.Y+5,Missile.PrimaryPart.Position.Z))
+					HRP.AssemblyLinearVelocity = Vector3.new(0,0,0)
+					wait(0.05)
+					SetNetworkOwnerRemote:FireServer(Missile:FindFirstChild("Button"),Missile.PrimaryPart.CFrame)
+					wait(0.1)
+					Missile.PrimaryPart.CFrame = CFrame.new(Vector3.new(-30.475, 191.4, 1.45))
+					local BodyPosition2 = Instance.new("BodyPosition")
+					BodyPosition2.Position = Vector3.new(-30.475, 191.4, 1.45)
+					BodyPosition2.P = 20000
+					BodyPosition2.Parent = Missile.PrimaryPart
+					BodyPosition2.MaxForce = Vector3.new(5000000,5000000,5000000)
+				end
+			end
+
+			for _, DrawerLightBrown in ipairs(workspace:GetDescendants()) do
+				if DrawerLightBrown:IsA("Model") and DrawerLightBrown.Name == "DrawerLightBrown" and DrawerLightBrown.PrimaryPart then
+					if DrawerLightBrown.PrimaryPart:FindFirstChildOfClass("BodyPosition") then
+						DrawerLightBrown.PrimaryPart:FindFirstChildOfClass("BodyPosition"):Destroy()
+						local bodyForce = Instance.new("BodyForce")
+						local direction = (DrawerLightBrown.PrimaryPart.Position - HumanoidRootPart.Position).unit
+						bodyForce.Force = direction * 900000
+						bodyForce.Parent = DrawerLightBrown.PrimaryPart
+						game:GetService("Debris"):AddItem(bodyForce, 0.1)
+					end
+				end
+			end
+
+			PreventEscape:Disconnect()
+			wait(.1)
+			--Humanoid.Health = 0
+			HRP.AssemblyLinearVelocity = Vector3.new(0,0,0)
+			HRP.CFrame = HumanoidRootPart.CFrame
+			wait(0.1)
+			SetNetworkOwnerRemote:FireServer(Torso,Torso.CFrame)
+			wait(0.05)
+			HRP.AssemblyLinearVelocity = Vector3.new(0,0,0)
+			HRP.CFrame = HumanoidRootPart.CFrame
+			wait(0.1)
+			SetNetworkOwnerRemote:FireServer(Torso,Torso.CFrame)
+			wait(0.05)
+			HRP.AssemblyLinearVelocity = Vector3.new(0,0,0)
+			HRP.CFrame = HumanoidRootPart.CFrame
+			wait(0.1)
+			SetNetworkOwnerRemote:FireServer(Torso,Torso.CFrame)
+			wait(0.05)
+			HRP.AssemblyLinearVelocity = Vector3.new(0,0,0)
+			HRP.CFrame = HumanoidRootPart.CFrame
+			wait(0.1)
+			SetNetworkOwnerRemote:FireServer(Torso,Torso.CFrame)
+			wait(0.05)
+			HRP.AssemblyLinearVelocity = Vector3.new(0,0,0)
+			HRP.CFrame = HumanoidRootPart.CFrame
+			wait(0.1)
+			SetNetworkOwnerRemote:FireServer(Torso,Torso.CFrame)
+
+			wait(1)
+
+			workspace.CurrentCamera.CameraSubject = chr.Humanoid
+			wait(0.01)
+			HRP.AssemblyLinearVelocity = Vector3.new(0,0,0)
+			HRP.CFrame = OriginalCframe
+			wait(0.01)
+			HRP.AssemblyLinearVelocity = Vector3.new(0,0,0)
+			HRP.CFrame = OriginalCframe
+		end
+	end
+
+end
+----------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------------
+local KeybindControlCharacter = Tabs.Troll:AddKeybind("KeybindControlCharacter", {
+	Title = "Control Characters",
+	Mode = "Hold",
+	Default = "c",
+	ChangedCallback = function(New)
+		local GrabParts = workspace:FindFirstChild("GrabParts")
+		if GrabParts then
+			local Item = GrabParts.GrabPart.WeldConstraint.Part1
+			if Item and Item.Parent:FindFirstChild("Humanoid") then
+
+
+			end
+		end
+	end
+})
+--[[local Limit = 5
+repeat
+	SpawnToyRemoteFunction:InvokeServer("DrawerLightBrown",plr.Character.Torso.CFrame,Vector3.new(0,0,0))
+	wait(0.5)
+	Limit -= 1
+until Limit < 0
+for _, Model in ipairs(workspace.PlotItems:GetDescendants()) do
+	if Model:IsA("Model") and Model.Name == "DrawerLightBrown" and Model:FindFirstChild("PlayerValue") and Model:FindFirstChild("PlayerValue").Value == plr then
+		plr.Character.HumanoidRootPart.CFrame = Model.PrimaryPart.CFrame
+		wait(0.1)
+		SetNetworkOwnerRemote:FireServer(Model.PrimaryPart,Model.PrimaryPart.CFrame)
+		wait(0.1)
+	end
+end]]
+
+--plr.Character.HumanoidRootPart.Changed:Connect(function()
+--SetNetworkOwnerRemote:FireServer(plr.Character.HumanoidRootPart,plr.Character.HumanoidRootPart.CFrame)
+--end)
+-- Addons:
+-- SaveManager (Allows you to have a configuration system)
+-- InterfaceManager (Allows you to have a interface managment system)
+
+-- Hand the library over to our managers
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
+
+-- Ignore keys that are used by ThemeManager.
+-- (we dont want configs to save themes, do we?)
+SaveManager:IgnoreThemeSettings()
+
+-- You can add indexes of elements the save manager should ignore
+SaveManager:SetIgnoreIndexes({})
+
+-- use case for doing it this way:
+-- a script hub could have themes in a global folder
+-- and game configs in a separate folder per game
+InterfaceManager:SetFolder("FluentScriptHub")
+SaveManager:SetFolder("FluentScriptHub/specific-game")
+
+InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+SaveManager:BuildConfigSection(Tabs.Settings)
+
+
+Window:SelectTab(1)
+
+Fluent:Notify({
+	Title = "Fluent",
+	Content = "The script has been loaded.",
+	Duration = 8
+})
+
+-- You can use the SaveManager:LoadAutoloadConfig() to load a config
+-- which has been marked to be one that auto loads!
+SaveManager:LoadAutoloadConfig()
